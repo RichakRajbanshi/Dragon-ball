@@ -1,4 +1,3 @@
-// Vercel serverless function using Google Gemini (free tier). Key stays secret on the server.
 const hits = {};
 const SYSTEM = `You are "Richak's Study Buddy", a friendly tutor for school students of Class 7, 8, 9 and 10 studying Physics and Chemistry (West Bengal board / NCERT level).
 - Explain step by step in simple words, with a small everyday example.
@@ -30,7 +29,8 @@ module.exports = async (req, res) => {
   const model = process.env.MODEL || "gemini-3.8-flash";
 
   try {
-    const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+    const opts = {
       method: "POST",
       headers: { "content-type": "application/json", "x-goog-api-key": key },
       body: JSON.stringify({
@@ -38,9 +38,15 @@ module.exports = async (req, res) => {
         contents: msgs,
         generationConfig: { maxOutputTokens: 700 }
       })
-    });
-    const d = await r.json();
-    if (!r.ok) return res.status(502).json({ error: "Gemini: " + ((d.error && d.error.message) || r.status) });
+    };
+    let r, d;
+    for (let i = 0; i < 3; i++) {
+      r = await fetch(url, opts);
+      d = await r.json();
+      if (r.ok || (r.status !== 503 && r.status !== 429)) break;
+      await new Promise(s => setTimeout(s, 1500));
+    }
+    if (!r.ok) return res.status(502).json({ error: "AI is busy, please try again in a minute." });
     const reply = ((d.candidates || [])[0]?.content?.parts || []).map(p => p.text || "").join("");
     if (!reply) return res.status(502).json({ error: "No answer, try rephrasing." });
     return res.status(200).json({ reply });
