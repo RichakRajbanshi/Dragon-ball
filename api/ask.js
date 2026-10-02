@@ -55,4 +55,25 @@ module.exports = async (req, res) => {
   try {
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
     const opts = {
-      method:
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: msgs,
+        generationConfig: { temperature: 0.5, maxOutputTokens: 2048 }
+      })
+    };
+    const r = await fetch(url, opts);
+    const data = await r.json();
+    if (!r.ok) {
+      const msg = (data.error && data.error.message) || "AI error";
+      return res.status(502).json({ error: "AI error: " + msg });
+    }
+    const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+    const reply = parts ? parts.map(p => p.text || "").join("") : "";
+    if (!reply) return res.status(502).json({ error: "Empty answer from AI. Try again." });
+    return res.status(200).json({ reply });
+  } catch (e) {
+    return res.status(500).json({ error: "Server error. Try again." });
+  }
+};
