@@ -27,7 +27,7 @@ module.exports = async (req, res) => {
   if (!msgs.length || msgs[0].role !== "user") return res.status(400).json({ error: "Bad request" });
   const cls = parseInt(req.body.cls, 10);
   const system = SYSTEM + (cls >= 7 && cls <= 10 ? `\nThe student is in Class ${cls}.` : "");
-  const model = process.env.MODEL || "gemini-2.5-flash";
+  const model = process.env.MODEL || "gemini-3.8-flash";
 
   try {
     const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`, {
