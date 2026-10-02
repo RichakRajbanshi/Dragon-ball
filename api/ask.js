@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
       })
     });
     const d = await r.json();
-    if (!r.ok) return res.status(502).json({ error: "AI is busy, try again in a minute." });
+    if (!r.ok) return res.status(502).json({ error: "Gemini: " + ((d.error && d.error.message) || r.status) });
     const reply = ((d.candidates || [])[0]?.content?.parts || []).map(p => p.text || "").join("");
     if (!reply) return res.status(502).json({ error: "No answer, try rephrasing." });
     return res.status(200).json({ reply });
