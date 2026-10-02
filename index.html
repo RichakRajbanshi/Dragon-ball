@@ -88,12 +88,12 @@ footer b{background:linear-gradient(90deg,var(--p),var(--acc),var(--c));-webkit-
 #ai{position:fixed;right:20px;bottom:20px;z-index:40}
 #fab{width:64px;height:64px;border-radius:50%;border:0;font-size:30px;cursor:pointer;background:linear-gradient(135deg,var(--p),var(--acc));box-shadow:0 10px 30px #5b8cff77;animation:fab 2.4s ease-in-out infinite}
 @keyframes fab{0%,100%{transform:scale(1);box-shadow:0 0 0 0 #ff7ad999}50%{transform:scale(1.08);box-shadow:0 0 0 16px #ff7ad900}}
-#panel{position:absolute;right:0;bottom:80px;width:min(380px,calc(100vw - 30px));height:min(540px,70vh);background:var(--card);border:1px solid var(--line);border-radius:20px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px #000a}
+#panel{position:absolute;right:0;bottom:80px;width:min(520px,calc(100vw - 24px));height:min(740px,calc(100vh - 120px));height:min(740px,calc(100dvh - 120px));background:var(--card);border:1px solid var(--line);border-radius:20px;display:none;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px #000a}
 #panel.open{display:flex;animation:pop .35s both}
 .ph{padding:14px 16px;background:linear-gradient(90deg,#16307a,#5b3bd6);font-weight:700;display:flex;justify-content:space-between;align-items:center}
 .ph button{background:none;border:0;color:#fff;font-size:20px;cursor:pointer}
 #msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px}
-.m{max-width:88%;padding:10px 14px;border-radius:14px;font-size:14.5px;line-height:1.5;animation:pop .3s both;word-wrap:break-word}
+.m{max-width:92%;padding:12px 16px;border-radius:14px;font-size:15.5px;line-height:1.6;animation:pop .3s both;word-wrap:break-word}
 .m.u{align-self:flex-end;background:var(--p)}.m.a{align-self:flex-start;background:#1a2350;border:1px solid var(--line)}
 .dots span{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;background:var(--c);animation:bob .9s infinite}
 .dots span:nth-child(2){animation-delay:.15s}.dots span:nth-child(3){animation-delay:.3s}
@@ -104,11 +104,59 @@ footer b{background:linear-gradient(90deg,var(--p),var(--acc),var(--c));-webkit-
 #ai-in{flex:1;padding:11px 14px;border-radius:12px;border:1px solid var(--line);background:#0b1130;color:var(--txt);outline:none;font-size:14px}
 #send{padding:0 18px;border:0;border-radius:12px;background:var(--c);color:#04221a;font-weight:800;cursor:pointer}
 #send:disabled{opacity:.5}
+/* ---- videos + handwritten + professional AI ---- */
+h2.fx{display:inline-block;opacity:0;transform:translateX(-30px);transition:opacity .7s,transform .7s}
+h2.fx.show{opacity:1;transform:none}
+h2.fx::after{content:"";display:block;height:4px;width:0;margin-top:6px;border-radius:4px;background:linear-gradient(90deg,var(--p),var(--acc),var(--c));transition:width 1.1s .25s cubic-bezier(.2,.8,.2,1)}
+h2.fx.show::after{width:100%}
+.vt{position:relative;height:170px;cursor:pointer;overflow:hidden}
+.vt::before{content:"";position:absolute;inset:0;z-index:1;background:linear-gradient(120deg,transparent 30%,#ffffff2e 50%,transparent 70%);transform:translateX(-100%);animation:sheen 3.5s ease-in-out infinite}
+.vt::after{content:"";position:absolute;inset:0;background:linear-gradient(#0000,#0007)}
+@keyframes sheen{60%,100%{transform:translateX(100%)}}
+.vid:hover .play{transform:scale(1.15)}
+.play{position:relative;z-index:2;width:60px;height:60px;border-radius:50%;display:grid;place-items:center;background:#fff;color:#e0245e;font-size:22px;padding-left:4px;transition:.3s;animation:ring 2s infinite}
+@keyframes ring{0%{box-shadow:0 0 0 0 #ffffffaa}70%,100%{box-shadow:0 0 0 20px #fff0}}
+.paper{height:170px}
+.paper.img{cursor:zoom-in;transition:filter .3s}
+.hw:hover .paper.img{filter:brightness(1.12)}
+.paper:not(.img){background-color:#f7f1dc;background-image:repeating-linear-gradient(#0000 0 23px,#7aa7d866 23px 24px)}
+.pen{font-size:54px;display:inline-block;transform-origin:20% 90%;animation:write 2.2s ease-in-out infinite}
+@keyframes write{0%,100%{transform:rotate(-8deg) translateX(-10px)}50%{transform:rotate(14deg) translateX(12px) translateY(-4px)}}
+#modal{position:fixed;inset:0;z-index:100;display:none;place-items:center;padding:16px;background:#02051099;backdrop-filter:blur(8px)}
+#modal.open{display:grid;animation:fade .3s both}
+@keyframes fade{from{opacity:0}}
+#mbox{position:relative;width:min(900px,100%);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:18px;padding:16px;box-shadow:0 30px 80px #000c;animation:zoom .45s cubic-bezier(.2,.9,.3,1.2) both}
+@keyframes zoom{from{opacity:0;transform:scale(.85) translateY(30px)}}
+#mx{position:absolute;top:10px;right:10px;z-index:3;width:36px;height:36px;border-radius:50%;border:0;background:#000b;color:#fff;font-size:16px;cursor:pointer;transition:.25s}
+#mx:hover{transform:rotate(90deg);background:var(--acc)}
+.vwrap{position:relative;padding-top:56.25%;border-radius:12px;overflow:hidden;background:#000}
+.vwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.vplay{width:100%;max-height:70vh;border-radius:12px;background:#000}
+.lbimg{display:block;max-width:100%;max-height:78vh;margin:auto;border-radius:12px}
+#mbox h4{margin:12px 4px 2px;font-size:18px}
+#fab{position:relative;display:grid;place-items:center;padding:0;background:linear-gradient(135deg,#3b6cff,#7a4dff)}
+@keyframes fab{0%,100%{transform:scale(1);box-shadow:0 10px 30px #5b8cff77,0 0 0 0 #5b8cffaa}50%{transform:scale(1.06);box-shadow:0 10px 30px #5b8cff77,0 0 0 16px #5b8cff00}}
+.fi{width:36px;height:36px}
+.fbadge{position:absolute;top:-4px;right:-4px;background:var(--c);color:#04221a;font:800 10px/1 'Segoe UI',system-ui,sans-serif;padding:4px 6px;border-radius:99px;border:2px solid var(--bg)}
+.ph{background:linear-gradient(90deg,#14307f,#4a35c9)}
+.who{display:flex;align-items:center;gap:12px}
+.av{position:relative;width:42px;height:42px;border-radius:12px;background:linear-gradient(135deg,#3b6cff,#7a4dff);display:grid;place-items:center;box-shadow:0 4px 14px #0006}
+.av svg{width:28px;height:28px}
+.av i{position:absolute;right:-3px;bottom:-3px;width:12px;height:12px;border-radius:50%;background:var(--c);border:2px solid #14307f}
+.who b{display:block;font-size:16px}
+.who small{display:block;color:#c9d3ff;font-weight:500;font-size:12px;margin-top:2px}
+.sug{max-height:140px;overflow:hidden;transition:max-height .35s,opacity .35s,padding .35s}
+.sug.gone{max-height:0;opacity:0;padding-bottom:0}
+.sug button{font-size:13px;padding:7px 12px}
+#ai-in{padding:13px 16px;font-size:15px}
+#send{padding:0 22px}
+@media(max-width:600px){#ai{right:12px;bottom:12px}.vt,.paper{height:150px}}
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="ico-ai" viewBox="0 0 48 48"><path d="M24 10 44 19 24 28 4 19Z" fill="#fff"/><path d="M12 24v8c0 3 5 6 12 6s12-3 12-6v-8l-12 5.5Z" fill="#fff" fill-opacity=".85"/><path d="M42 20.5V31" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="42" cy="33.5" r="2.2" fill="#fff"/><path d="M38 2.5 39.7 6.3 43.5 8 39.7 9.7 38 13.5 36.3 9.7 32.5 8 36.3 6.3Z" fill="#fff"/></symbol></svg>
 <div class="float" id="float"></div>
-<nav><div class="logo">⚛ RICHAK'S NOTES</div><div><a href="#notes">Notes</a><a href="#credit">About</a></div></nav>
+<nav><div class="logo">⚛ RICHAK'S NOTES</div><div><a href="#notes">Notes</a><a href="#videos">Videos</a><a href="#handwritten">Handwritten</a><a href="#credit">About</a></div></nav>
 
 <section class="hero">
   <div>
@@ -145,6 +193,22 @@ footer b{background:linear-gradient(90deg,var(--p),var(--acc),var(--c));-webkit-
   <div class="grid" id="grid"></div>
 </main>
 
+<main id="videos">
+  <h2 class="fx">🎬 Video Lessons</h2>
+  <p class="sub">Watch class-wise video lessons, then pick a subject.</p>
+  <div class="tabs" id="v-tabs"></div>
+  <div class="tools" id="v-chips"></div>
+  <div class="grid" id="v-grid"></div>
+</main>
+
+<main id="handwritten">
+  <h2 class="fx">✍️ Handwritten Notes</h2>
+  <p class="sub">Neat handwritten notes, class by class. Tap to zoom or download.</p>
+  <div class="tabs" id="h-tabs"></div>
+  <div class="tools" id="h-chips"></div>
+  <div class="grid" id="h-grid"></div>
+</main>
+
 <footer id="credit">
   <div>Made with ❤️ by</div>
   <b>Richak Rajbanshi</b>
@@ -152,11 +216,11 @@ footer b{background:linear-gradient(90deg,var(--p),var(--acc),var(--c));-webkit-
 </footer>
 
 <div id="prog"></div><div id="glow"></div>
-<div id="ai"><div id="panel"><div class="ph"><span>🤖 Study Buddy · Ask your doubt</span><button id="x" aria-label="Close">✕</button></div>
+<div id="ai"><div id="panel"><div class="ph"><div class="who"><div class="av"><svg viewBox="0 0 48 48"><use href="#ico-ai"/></svg><i></i></div><div><b>Study Buddy</b><small>AI Tutor · Physics &amp; Chemistry</small></div></div><button id="x" aria-label="Close">✕</button></div>
 <div id="msgs"></div>
 <div class="sug"><button>What is Newton's 2nd law?</button><button>Balance H₂ + O₂ → H₂O</button><button>নিউটনের গতির সূত্র বোঝাও</button></div>
 <div class="pin"><input id="ai-in" placeholder="Type your doubt…" maxlength="500"><button id="send">Ask</button></div></div>
-<button id="fab" aria-label="Ask AI">🤖</button></div>
+<button id="fab" aria-label="Ask Study Buddy"><svg class="fi" viewBox="0 0 48 48"><use href="#ico-ai"/></svg><span class="fbadge">AI</span></button></div>
 <script>
 var NOTES=[],cls=10,sub="All",q="";
 var IMG=/\.(jpe?g|png|webp|gif)$/i;
@@ -202,7 +266,7 @@ fetch("notes.json").then(function(r){return r.json()}).catch(function(){return[]
  addEventListener("scroll",function(){var h=document.documentElement;pr.style.width=(h.scrollTop/(h.scrollHeight-h.clientHeight)*100)+"%"});
  addEventListener("mousemove",function(e){gl.style.left=e.clientX+"px";gl.style.top=e.clientY+"px"});
  for(var i=0;i<10;i++){var b=document.createElement("div");b.className="bub";var z=10+Math.random()*30;b.style.cssText="width:"+z+"px;height:"+z+"px;left:"+Math.random()*100+"%;animation-duration:"+(9+Math.random()*12)+"s;animation-delay:"+(-Math.random()*15)+"s";document.body.appendChild(b)}
- var W=["Class 7 to 10","Physics made easy","Chemistry made simple","Ask your doubts to AI 🤖"],wi=0,ci=0,del=false,t=document.getElementById("type");
+ var W=["Class 7 to 10","Physics made easy","Chemistry made simple","Video lessons & handwritten notes","Ask your doubts to our AI tutor"],wi=0,ci=0,del=false,t=document.getElementById("type");
  (function tick(){var w=W[wi];ci+=del?-1:1;t.textContent=w.slice(0,ci);var d=del?35:75;
   if(!del&&ci===w.length){del=true;d=1400}else if(del&&ci===0){del=false;wi=(wi+1)%W.length;d=300}setTimeout(tick,d)})();
  document.addEventListener("click",function(e){var el=e.target.closest(".btn,.tab,.acts a");if(!el)return;var r=el.getBoundingClientRect(),s=document.createElement("span");s.className="rip";var z=Math.max(r.width,r.height);s.style.cssText="width:"+z+"px;height:"+z+"px;left:"+(e.clientX-r.left-z/2)+"px;top:"+(e.clientY-r.top-z/2)+"px";el.appendChild(s);setTimeout(function(){s.remove()},600)});
@@ -220,7 +284,7 @@ fetch("notes.json").then(function(r){return r.json()}).catch(function(){return[]
  document.getElementById("x").onclick=function(){panel.classList.remove("open")};
  [].forEach.call(document.querySelectorAll(".sug button"),function(b){b.onclick=function(){inp.value=b.textContent;ask()}});
  function ask(){
-  var q=inp.value.trim();if(!q||busy)return;inp.value="";busy=true;btn.disabled=true;
+  var q=inp.value.trim();if(!q||busy)return;inp.value="";var sg=document.querySelector(".sug");if(sg){sg.classList.add("gone");setTimeout(function(){sg.remove()},400)}busy=true;btn.disabled=true;
   add("u",esc(q));hist.push({role:"user",content:q});
   var w=add("a",'<span class="dots"><span></span><span></span><span></span></span>');
   fetch("/api/ask",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:hist,cls:cls})})
@@ -229,6 +293,65 @@ fetch("notes.json").then(function(r){return r.json()}).catch(function(){return[]
   }).catch(function(){hist.pop();w.textContent="Can't reach the AI. It works after deploying on Vercel."})
   .then(function(){busy=false;btn.disabled=false;box.scrollTop=box.scrollHeight})}
  btn.onclick=ask;inp.onkeydown=function(e){if(e.key==="Enter")ask()};
+})();
+</script>
+<div id="modal"><div id="mbox"></div></div>
+<script>
+// ---- Video lessons + Handwritten notes ----
+(function(){
+var VIDEOS=[
+ // {class:10, subject:"Physics", title:"Light – Reflection", yt:"https://youtu.be/XXXXXXXXXXX"},
+],
+HAND=[
+ // {class:10, subject:"Chemistry", title:"Chemical Reactions", file:"handwritten/chem-reactions.jpg"},
+];
+function $(i){return document.getElementById(i)}
+function ytid(s){var m=String(s||"").match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([\w-]{11})|^([\w-]{11})$/);return m?(m[1]||m[2]):""}
+var modal=$("modal"),mbox=$("mbox");
+function openM(h){mbox.innerHTML='<button id="mx" aria-label="Close">✕</button>'+h;modal.classList.add("open");document.body.style.overflow="hidden"}
+function closeM(){modal.classList.remove("open");mbox.innerHTML="";document.body.style.overflow=""}
+modal.onclick=function(e){if(e.target===modal||e.target.id==="mx")closeM()};
+addEventListener("keydown",function(e){if(e.key==="Escape")closeM()});
+
+function mk(p,list,card,ico,msg){
+ var st={c:10,s:"All"},T=$(p+"-tabs"),C=$(p+"-chips"),G=$(p+"-grid");
+ function draw(){
+  G.innerHTML="";
+  var l=list().filter(function(n){return +n.class===st.c&&(st.s==="All"||n.subject===st.s)});
+  if(!l.length){G.innerHTML='<div class="empty"><span class="big">'+ico+'</span>'+msg+'</div>';return}
+  l.forEach(function(n,i){var d=card(n);d.style.transitionDelay=(i%6)*80+"ms";G.appendChild(d);io.observe(d)})
+ }
+ [7,8,9,10].forEach(function(c){var b=document.createElement("button");b.className="tab"+(c===st.c?" on":"");b.textContent="Class "+c;
+  b.onclick=function(){st.c=c;[].forEach.call(T.children,function(t){t.classList.remove("on")});b.classList.add("on");draw()};T.appendChild(b)});
+ [["All","All"],["Physics","⚡ Physics"],["Chemistry","🧪 Chemistry"]].forEach(function(x){var b=document.createElement("button");b.className="chip"+(x[0]==="All"?" on":"");b.textContent=x[1];
+  b.onclick=function(){st.s=x[0];[].forEach.call(C.children,function(t){t.classList.remove("on")});b.classList.add("on");draw()};C.appendChild(b)});
+ var g=G;
+ g.addEventListener("mousemove",function(e){var n=e.target.closest(".note");if(!n||!n.classList.contains("show"))return;var r=n.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;n.style.transitionDelay="0ms";n.style.transform="perspective(700px) rotateY("+x*10+"deg) rotateX("+-y*10+"deg) translateY(-6px)"});
+ g.addEventListener("mouseout",function(e){var n=e.target.closest(".note");if(n)n.style.transform=""});
+ return draw;
+}
+
+function vcard(n){
+ var id=ytid(n.yt||n.url),ic=n.subject==="Physics"?"⚡":"🧪",d=document.createElement("div");d.className="note vid";
+ var bg=id?'background-image:url(https://img.youtube.com/vi/'+id+'/hqdefault.jpg)':'';
+ d.innerHTML='<div class="thumb vt '+esc(n.subject)+'" style="'+bg+'"><span class="play">▶</span></div><div class="body"><span class="badge">'+ic+' '+esc(n.subject)+' · Class '+esc(n.class)+'</span><h3>'+esc(n.title)+'</h3><div class="acts"><a class="v" href="#">▶ Watch</a>'+(id?'<a class="d" href="https://www.youtube.com/watch?v='+id+'" target="_blank" rel="noopener">YouTube</a>':'')+'</div></div>';
+ function go(e){e.preventDefault();
+  var h=id?'<div class="vwrap"><iframe src="https://www.youtube-nocookie.com/embed/'+id+'?autoplay=1&rel=0" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe></div>'
+   :(n.file?'<video class="vplay" controls autoplay src="'+esc(encodeURI(n.file))+'"></video>':'<p class="sub">Video link not added yet.</p>');
+  openM(h+'<h4>'+esc(n.title)+'</h4>')}
+ d.querySelector(".thumb").onclick=go;d.querySelector(".v").onclick=go;return d}
+
+function hcard(n){
+ var isI=IMG.test(n.file||""),f=esc(encodeURI(n.file||"")),ic=n.subject==="Physics"?"⚡":"🧪",d=document.createElement("div");d.className="note hw";
+ d.innerHTML='<div class="thumb paper'+(isI?' img':'')+'"'+(isI?' style="background-image:url(\''+f+'\')"':'')+'>'+(isI?'':'<span class="pen">✍️</span>')+'</div><div class="body"><span class="badge">'+ic+' '+esc(n.subject)+' · Class '+esc(n.class)+'</span><h3>'+esc(n.title)+'</h3><div class="acts"><a class="v" href="'+f+'" target="_blank" rel="noopener">View</a><a class="d" href="'+f+'" download>Download</a></div></div>';
+ if(isI){var o=function(e){e.preventDefault();openM('<img class="lbimg" src="'+f+'" alt="'+esc(n.title)+'"><h4>'+esc(n.title)+'</h4>')};d.querySelector(".v").onclick=o;d.querySelector(".thumb").onclick=o}
+ return d}
+
+var dv=mk("v",function(){return VIDEOS},vcard,"🎬","No videos for this class yet — coming soon!");
+var dh=mk("h",function(){return HAND},hcard,"✍️","Handwritten notes for this class are coming soon!");
+function load(f,arr,draw){fetch(f).then(function(r){return r.ok?r.json():[]}).catch(function(){return[]}).then(function(d){if(Array.isArray(d))d.forEach(function(x){arr.push(x)});draw()})}
+dv();dh();load("videos.json",VIDEOS,dv);load("handwritten.json",HAND,dh);
+[].forEach.call(document.querySelectorAll("h2.fx"),function(h){io.observe(h)});
 })();
 </script>
 </body>
