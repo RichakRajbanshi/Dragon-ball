@@ -1,112 +1,140 @@
-const hits = {};
+// api/ask.js — Richak's Study Buddy (Vercel serverless function)
+// Calls Gemini with automatic retry + model fallback to survive "busy" errors.
 
-const SYSTEM = `You are "Richak's Study Buddy", an expert, patient and friendly teacher for Class 7, 8, 9 and 10 students studying Physics and Chemistry (West Bengal board / NCERT level). You teach like a great school teacher who truly wants the student to understand the concept deeply, not just memorize it.
+const MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+];
 
-HOW TO ANSWER (use this structure for every concept question):
-1. Direct answer: start with a clear one or two line definition or answer.
-2. Deep explanation: explain the concept in 2 to 4 full paragraphs. Explain WHY it happens and the reasoning behind it, the way a teacher explains in class. Connect it to related ideas the student already knows.
-3. Everyday example: give a real-life example from daily life in India (kitchen, cycle, bus, rain, cricket, electricity at home, etc.).
-4. Formula and derivation: when a formula exists, write it, explain every symbol with its SI unit, and show how it is derived or why it makes sense, in simple steps.
-5. Solved example: give one fully solved numerical or equation problem with steps.
-6. Exam tips: mention common mistakes students make and the key points the West Bengal board exam usually asks for.
-7. Practice: end with 2 short practice questions with answer hints.
+const SYSTEM_PROMPT = `You are "Study Buddy", a friendly and expert AI tutor for school students of Class 7 to 10 (West Bengal Board / NCERT level).
+You teach ONLY Physics and Chemistry.
 
-FOR NUMERICALS: write Given, To find, Formula, Substitution, Calculation, Answer with units. Check that units match.
+Rules:
+- Reply in the same language the student uses (English or বাংলা). If they mix, mix naturally.
+- Give detailed, well-structured answers: definition, explanation, formula (with units and symbols explained), a simple real-life example, and a solved numerical when relevant.
+- Explain deep concepts step by step in simple words, as if teaching in class.
+- Use short headings and bullet points where helpful.
+- If the question is outside Physics or Chemistry, politely say you can only help with Class 7-10 Physics and Chemistry.
+- End with one short tip or a quick practice question when it fits.`;
 
-FOR CHEMICAL EQUATIONS: show the unbalanced equation, count atoms of each element on both sides, balance step by step, then write the final balanced equation with state symbols when useful.
+const MAX_TOTAL_MS = 9000; // stay under Vercel's default 10s limit
+const RETRIES_PER_MODEL = 2;
 
-FORMATTING RULES (very important):
-- NEVER use LaTeX or dollar signs. Never write \\text, \\frac, \\rightarrow, or any backslash commands.
-- Write formulas in plain text with Unicode: H₂O, CO₂, H₂SO₄, m/s², F = m × a, v² = u² + 2as, V = I × R, →, ×, ÷, °C, Δ, ρ, λ, Ω.
-- Use short headings in bold like **Concept**, **Example**, **Formula**, **Exam Tip**.
-- Use "-" for bullet points only when listing. Write explanations as proper paragraphs, not just bullets.
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-LANGUAGE AND SCOPE:
-- Reply in the same language the student writes in (English, Bengali, or Banglish). Keep scientific terms and formulas clear.
-- For a simple or quick question, answer shortly but still correctly. For concept questions, give detailed answers of around 300 to 500 words. If the student asks for more detail, go deeper.
-- If the student is in a particular class, match the depth to that class level.
-- If a question is not about school Physics or Chemistry, politely say you can only help with those subjects.
-- Be accurate. If you are not sure, say so instead of guessing.
-- Never help cheat in exams; help the student understand.`;
-
-module.exports = async (req, res) => {
-  if (req.method !== "POST") return res.status(405).json({ error: "POST only" });
-
-  const ip = (req.headers["x-forwarded-for"] || "x").split(",")[0];
-  const now = Date.now();
-  hits[ip] = (hits[ip] || []).filter(t => now - t < 60000);
-  if (hits[ip].length >= 6) return res.status(429).json({ error: "Too many questions. Wait a minute." });
-  hits[ip].push(now);
-
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return res.status(500).json({ error: "API key not set on server." });
-
-  let msgs = (req.body && req.body.messages) || [];
-  msgs = msgs.slice(-10).map(m => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: String(m.content || "").slice(0, 2000) }]
-  }));
-  if (!msgs.length || msgs[0].role !== "user") return res.status(400).json({ error: "Bad request" });
-
-  const cls = parseInt(req.body.cls, 10);
-  const system = SYSTEM + (cls >= 7 && cls <= 10 ? `\nThe student is in Class ${cls}.` : "");
-  // Uses gemini-3.8-flash only. (Optional: set FALLBACK_MODELS in Vercel to add backups.)
-  const models = [process.env.MODEL || "gemini-3.8-flash"].concat(
-    (process.env.FALLBACK_MODELS || "").split(",").map(m => m.trim()).filter(Boolean)
-  ).filter((m, i, a) => a.indexOf(m) === i);
-
-  const body = JSON.stringify({
-    systemInstruction: { parts: [{ text: system }] },
-    contents: msgs,
-    generationConfig: { temperature: 0.6, maxOutputTokens: 2048 }
+async function callGemini(model, body, signal) {
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+  return fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": process.env.GEMINI_API_KEY,
+    },
+    body: JSON.stringify(body),
+    signal,
   });
+}
 
-  const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const started = Date.now();
-  const BUDGET = 27000;                       // stay under Vercel's 30s limit
-  const left = () => BUDGET - (Date.now() - started);
-  let lastErr = "";
+async function askWithFallback(body) {
+  const start = Date.now();
+  let lastStatus = 0;
 
-  // Pass 1: try every model once. Pass 2: after a short pause, try them all again.
-  for (let pass = 0; pass < 4; pass++) {
-    for (const model of models) {
-      if (left() < 3000) break;
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), Math.min(left() - 500, 14000));
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt <= RETRIES_PER_MODEL; attempt++) {
+      const remaining = MAX_TOTAL_MS - (Date.now() - start);
+      if (remaining < 1500) return { ok: false, status: lastStatus || 503 };
+
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), remaining);
+
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-        const r = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body,
-          signal: ctrl.signal
-        });
-        const data = await r.json().catch(() => ({}));
+        const r = await callGemini(model, body, controller.signal);
         clearTimeout(timer);
 
         if (r.ok) {
-          const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-          const reply = parts ? parts.map(p => p.text || "").join("").trim() : "";
-          if (reply) return res.status(200).json({ reply });
-          lastErr = "empty answer";
-          continue;
+          const data = await r.json();
+          const text =
+            data?.candidates?.[0]?.content?.parts
+              ?.map((p) => p.text || "")
+              .join("") || "";
+          if (text.trim()) return { ok: true, text, model };
+          lastStatus = 502; // empty/blocked reply -> try next
+          break;
         }
-        lastErr = (data.error && data.error.message) || ("HTTP " + r.status);
-        console.error("Gemini", model, r.status, lastErr);
-        // 400/403: bad request or bad key. Same for every model, so stop and report clearly.
-        if (r.status === 403 || r.status === 401) {
-          return res.status(500).json({ error: "API key problem: " + lastErr });
-        }
-      } catch (e) {
+
+        lastStatus = r.status;
+        console.error(`[${model}] attempt ${attempt + 1} failed:`, r.status, await r.text());
+
+        // Retry only on busy/rate-limit/server errors; otherwise move to next model
+        if (![429, 500, 503, 504].includes(r.status)) break;
+        await sleep(600 * 2 ** attempt); // 0.6s, 1.2s
+      } catch (err) {
         clearTimeout(timer);
-        lastErr = e.name === "AbortError" ? "timeout" : (e.message || "network error");
-        console.error("Gemini", model, lastErr);
+        console.error(`[${model}] network/timeout error:`, err.message);
+        lastStatus = 504;
+        break;
       }
     }
-    if (left() > 6000) await sleep(1500 * (pass + 1));
+  }
+  return { ok: false, status: lastStatus || 503 };
+}
+
+module.exports = async function handler(req, res) {
+  // CORS (harmless if same-origin)
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  if (req.method !== "POST") return res.status(405).json({ error: "Use POST" });
+
+  if (!process.env.GEMINI_API_KEY) {
+    return res.status(500).json({ reply: "Server is not configured (missing API key)." });
   }
 
-  // Show the real reason (shortened) so we can see what Google said. Remove the detail later if you like.
-  const detail = String(lastErr || "no response").replace(/\s+/g, " ").slice(0, 200);
-  return res.status(503).json({ error: "The AI is very busy right now. Please try again in a few seconds. [Reason: " + detail + "]" });
+  try {
+    const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
+    const message = String(body.message || body.question || "").trim();
+    const history = Array.isArray(body.history) ? body.history : [];
+
+    if (!message) return res.status(400).json({ reply: "Please type your doubt first." });
+    if (message.length > 2000) {
+      return res.status(400).json({ reply: "Your question is too long. Please shorten it." });
+    }
+
+    // Keep only the last 6 turns to save tokens
+    const contents = history
+      .slice(-6)
+      .filter((h) => h && h.text)
+      .map((h) => ({
+        role: h.role === "user" ? "user" : "model",
+        parts: [{ text: String(h.text).slice(0, 2000) }],
+      }));
+    contents.push({ role: "user", parts: [{ text: message }] });
+
+    const payload = {
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents,
+      generationConfig: {
+        temperature: 0.6,
+        maxOutputTokens: 1500,
+      },
+    };
+
+    const result = await askWithFallback(payload);
+
+    if (result.ok) return res.status(200).json({ reply: result.text });
+
+    if (result.status === 429 || result.status === 503) {
+      return res.status(200).json({
+        reply: "The AI is very busy right now. Please try again in a few seconds.",
+      });
+    }
+    return res.status(200).json({
+      reply: "Sorry, something went wrong. Please try again.",
+    });
+  } catch (err) {
+    console.error("Handler error:", err);
+    return res.status(200).json({ reply: "Sorry, something went wrong. Please try again." });
+  }
 };
