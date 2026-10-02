@@ -50,10 +50,9 @@ module.exports = async (req, res) => {
 
   const cls = parseInt(req.body.cls, 10);
   const system = SYSTEM + (cls >= 7 && cls <= 10 ? `\nThe student is in Class ${cls}.` : "");
-  // Order: best first, then other free-tier models that exist. Override with MODEL / FALLBACK_MODELS in Vercel.
+  // Uses gemini-3.8-flash only. (Optional: set FALLBACK_MODELS in Vercel to add backups.)
   const models = [process.env.MODEL || "gemini-3.8-flash"].concat(
-    (process.env.FALLBACK_MODELS || "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite")
-      .split(",").map(m => m.trim()).filter(Boolean)
+    (process.env.FALLBACK_MODELS || "").split(",").map(m => m.trim()).filter(Boolean)
   ).filter((m, i, a) => a.indexOf(m) === i);
 
   const body = JSON.stringify({
@@ -69,7 +68,7 @@ module.exports = async (req, res) => {
   let lastErr = "";
 
   // Pass 1: try every model once. Pass 2: after a short pause, try them all again.
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 4; pass++) {
     for (const model of models) {
       if (left() < 3000) break;
       const ctrl = new AbortController();
@@ -104,8 +103,10 @@ module.exports = async (req, res) => {
         console.error("Gemini", model, lastErr);
       }
     }
-    if (pass === 0 && left() > 8000) await sleep(2500);
+    if (left() > 6000) await sleep(1500 * (pass + 1));
   }
 
-  return res.status(503).json({ error: "The AI is very busy right now. Please try again in a few seconds." });
+  // Show the real reason (shortened) so we can see what Google said. Remove the detail later if you like.
+  const detail = String(lastErr || "no response").replace(/\s+/g, " ").slice(0, 200);
+  return res.status(503).json({ error: "The AI is very busy right now. Please try again in a few seconds. [Reason: " + detail + "]" });
 };
