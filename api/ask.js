@@ -50,30 +50,49 @@ module.exports = async (req, res) => {
 
   const cls = parseInt(req.body.cls, 10);
   const system = SYSTEM + (cls >= 7 && cls <= 10 ? `\nThe student is in Class ${cls}.` : "");
-  const model = process.env.MODEL || "gemini-3.8-flash";
+  const models = [process.env.MODEL || "gemini-3.8-flash"].concat((process.env.FALLBACK_MODELS || "gemini-2.5-flash,gemini-2.5-flash-lite").split(",").map(m => m.trim()).filter(Boolean));
 
-  try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-    const opts = {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: system }] },
-        contents: msgs,
-        generationConfig: { temperature: 0.5, maxOutputTokens: 2048 }
-      })
-    };
-    const r = await fetch(url, opts);
-    const data = await r.json();
-    if (!r.ok) {
-      const msg = (data.error && data.error.message) || "AI error";
-      return res.status(502).json({ error: "AI error: " + msg });
+  const body = JSON.stringify({
+    systemInstruction: { parts: [{ text: system }] },
+    contents: msgs,
+    generationConfig: { temperature: 0.6, maxOutputTokens: 2048 }
+  });
+
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  let lastErr = "Unknown error";
+
+  // Try each model; retry the busy ones (503/429/500) once or twice before moving on.
+  for (const model of models) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+        const r = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+          body
+        });
+        const data = await r.json().catch(() => ({}));
+
+        if (r.ok) {
+          const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+          const reply = parts ? parts.map(p => p.text || "").join("").trim() : "";
+          if (reply) return res.status(200).json({ reply });
+          lastErr = "Empty answer from AI. Please rephrase your question.";
+          break;
+        }
+
+        lastErr = (data.error && data.error.message) || ("HTTP " + r.status);
+        if ([429, 500, 502, 503, 504].includes(r.status)) {
+          if (attempt === 0) await sleep(1200);
+          continue;            // retry same model once
+        }
+        break;                 // other errors (400/403/404): go to next model
+      } catch (e) {
+        lastErr = e.message || "Network error";
+        if (attempt === 0) await sleep(1200);
+      }
     }
-    const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
-    const reply = parts ? parts.map(p => p.text || "").join("") : "";
-    if (!reply) return res.status(502).json({ error: "Empty answer from AI. Try again." });
-    return res.status(200).json({ reply });
-  } catch (e) {
-    return res.status(500).json({ error: "Server error. Try again." });
   }
+
+  return res.status(502).json({ error: "The AI is very busy right now. Please try again in a few seconds. (" + lastErr + ")" });
 };
