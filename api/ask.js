@@ -50,7 +50,11 @@ module.exports = async (req, res) => {
 
   const cls = parseInt(req.body.cls, 10);
   const system = SYSTEM + (cls >= 7 && cls <= 10 ? `\nThe student is in Class ${cls}.` : "");
-  const models = [process.env.MODEL || "gemini-3.8-flash"].concat((process.env.FALLBACK_MODELS || "gemini-2.5-flash,gemini-2.5-flash-lite").split(",").map(m => m.trim()).filter(Boolean));
+  // Order: best first, then other free-tier models that exist. Override with MODEL / FALLBACK_MODELS in Vercel.
+  const models = [process.env.MODEL || "gemini-3.8-flash"].concat(
+    (process.env.FALLBACK_MODELS || "gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite")
+      .split(",").map(m => m.trim()).filter(Boolean)
+  ).filter((m, i, a) => a.indexOf(m) === i);
 
   const body = JSON.stringify({
     systemInstruction: { parts: [{ text: system }] },
@@ -59,40 +63,49 @@ module.exports = async (req, res) => {
   });
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  let lastErr = "Unknown error";
+  const started = Date.now();
+  const BUDGET = 27000;                       // stay under Vercel's 30s limit
+  const left = () => BUDGET - (Date.now() - started);
+  let lastErr = "";
 
-  // Try each model; retry the busy ones (503/429/500) once or twice before moving on.
-  for (const model of models) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+  // Pass 1: try every model once. Pass 2: after a short pause, try them all again.
+  for (let pass = 0; pass < 2; pass++) {
+    for (const model of models) {
+      if (left() < 3000) break;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), Math.min(left() - 500, 14000));
       try {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         const r = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-          body
+          body,
+          signal: ctrl.signal
         });
         const data = await r.json().catch(() => ({}));
+        clearTimeout(timer);
 
         if (r.ok) {
           const parts = data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
           const reply = parts ? parts.map(p => p.text || "").join("").trim() : "";
           if (reply) return res.status(200).json({ reply });
-          lastErr = "Empty answer from AI. Please rephrase your question.";
-          break;
+          lastErr = "empty answer";
+          continue;
         }
-
         lastErr = (data.error && data.error.message) || ("HTTP " + r.status);
-        if ([429, 500, 502, 503, 504].includes(r.status)) {
-          if (attempt === 0) await sleep(1200);
-          continue;            // retry same model once
+        console.error("Gemini", model, r.status, lastErr);
+        // 400/403: bad request or bad key. Same for every model, so stop and report clearly.
+        if (r.status === 403 || r.status === 401) {
+          return res.status(500).json({ error: "API key problem: " + lastErr });
         }
-        break;                 // other errors (400/403/404): go to next model
       } catch (e) {
-        lastErr = e.message || "Network error";
-        if (attempt === 0) await sleep(1200);
+        clearTimeout(timer);
+        lastErr = e.name === "AbortError" ? "timeout" : (e.message || "network error");
+        console.error("Gemini", model, lastErr);
       }
     }
+    if (pass === 0 && left() > 8000) await sleep(2500);
   }
 
-  return res.status(502).json({ error: "The AI is very busy right now. Please try again in a few seconds. (" + lastErr + ")" });
+  return res.status(503).json({ error: "The AI is very busy right now. Please try again in a few seconds." });
 };
