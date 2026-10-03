@@ -121,7 +121,16 @@ module.exports = async function handler(req, res) {
     const message = extractMessage(body);
     const history = Array.isArray(body.history) ? body.history : [];
 
-    if (!message) return res.status(400).json({ reply: "Please type your doubt first." });
+    if (!message) {
+      // DEBUG reply: shows which keys the frontend actually sent
+      return res.status(400).json({
+        reply:
+          "DEBUG keys: " +
+          Object.keys(body).join(", ") +
+          " | type: " +
+          typeof req.body,
+      });
+    }
     if (message.length > 2000) {
       return res.status(400).json({ reply: "Your question is too long. Please shorten it." });
     }
