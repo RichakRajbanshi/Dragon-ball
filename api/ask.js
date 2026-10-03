@@ -1,5 +1,6 @@
 // api/ask.js — Richak's Study Buddy (Vercel serverless function)
 // Calls Gemini with automatic retry + model fallback to survive "busy" errors.
+// Frontend sends: { messages: [{role, content|text}, ...], cls }
 
 const MODELS = [
   "gemini-2.5-flash",
@@ -18,7 +19,7 @@ Rules:
 - If the question is outside Physics or Chemistry, politely say you can only help with Class 7-10 Physics and Chemistry.
 - End with one short tip or a quick practice question when it fits.`;
 
-const MAX_TOTAL_MS = 9000; // stay under Vercel's default 10s limit
+const MAX_TOTAL_MS = 25000; // vercel.json allows maxDuration 30s
 const RETRIES_PER_MODEL = 2;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -80,24 +81,54 @@ async function askWithFallback(body) {
   return { ok: false, status: lastStatus || 503 };
 }
 
-// Accepts many possible field names so a frontend mismatch can't break it
-function extractMessage(body) {
-  const candidates = [
-    body.message,
-    body.question,
-    body.text,
-    body.prompt,
-    body.q,
-    body.query,
-    body.input,
-    body.msg,
-    body.content,
-    body.doubt,
-  ];
-  for (const c of candidates) {
-    if (typeof c === "string" && c.trim()) return c.trim();
+// Pull text out of a chat item in any common shape
+function itemText(m) {
+  if (!m) return "";
+  if (typeof m === "string") return m.trim();
+  const t = m.text ?? m.content ?? m.message ?? m.parts?.[0]?.text ?? "";
+  return String(t).trim();
+}
+
+function isUserItem(m) {
+  const r = String((m && (m.role || m.sender || m.from)) || "").toLowerCase();
+  return r === "user" || r === "student" || r === "human";
+}
+
+// Returns { message, history } from whatever the frontend sent
+function parseInput(body) {
+  // Main format: { messages: [...] }
+  if (Array.isArray(body.messages) && body.messages.length) {
+    const items = body.messages
+      .map((m) => ({ user: isUserItem(m), text: itemText(m) }))
+      .filter((m) => m.text);
+
+    let lastUser = -1;
+    for (let i = items.length - 1; i >= 0; i--) {
+      if (items[i].user) { lastUser = i; break; }
+    }
+    if (lastUser !== -1) {
+      return {
+        message: items[lastUser].text,
+        history: items.slice(0, lastUser).map((m) => ({
+          role: m.user ? "user" : "model",
+          text: m.text,
+        })),
+      };
+    }
   }
-  return "";
+
+  // Fallback: single-field formats
+  const keys = ["message", "question", "text", "prompt", "q", "query", "input", "msg", "content", "doubt"];
+  let message = "";
+  for (const k of keys) {
+    if (typeof body[k] === "string" && body[k].trim()) { message = body[k].trim(); break; }
+  }
+  const history = Array.isArray(body.history)
+    ? body.history
+        .map((h) => ({ role: isUserItem(h) ? "user" : "model", text: itemText(h) }))
+        .filter((h) => h.text)
+    : [];
+  return { message, history };
 }
 
 module.exports = async function handler(req, res) {
@@ -114,47 +145,34 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-
-    // Debug: check Vercel function logs to see what the frontend really sends
-    console.log("BODY:", JSON.stringify(body).slice(0, 500));
-
-    const message = extractMessage(body);
-    const history = Array.isArray(body.history) ? body.history : [];
+    const { message, history } = parseInput(body);
 
     if (!message) {
-      // DEBUG reply: shows which keys the frontend actually sent
-      return res.status(400).json({
-        reply:
-          "DEBUG keys: " +
-          Object.keys(body).join(", ") +
-          " | type: " +
-          typeof req.body,
-      });
+      return res.status(400).json({ reply: "Please type your doubt first." });
     }
     if (message.length > 2000) {
       return res.status(400).json({ reply: "Your question is too long. Please shorten it." });
     }
 
     // Keep only the last 6 turns to save tokens
-    let contents = history
-      .slice(-6)
-      .map((h) => {
-        const t = h && (h.text ?? h.content ?? h.message);
-        if (!t) return null;
-        return {
-          role: h.role === "user" ? "user" : "model",
-          parts: [{ text: String(t).slice(0, 2000) }],
-        };
-      })
-      .filter(Boolean);
+    const contents = history.slice(-6).map((h) => ({
+      role: h.role,
+      parts: [{ text: h.text.slice(0, 2000) }],
+    }));
 
     // Gemini expects the conversation to start with a user turn
     while (contents.length && contents[0].role !== "user") contents.shift();
 
     contents.push({ role: "user", parts: [{ text: message }] });
 
+    // Optional class level from the frontend (e.g. "7", "8", "9", "10")
+    const cls = body.cls ? String(body.cls).replace(/[^\w\s-]/g, "").slice(0, 20) : "";
+    const systemText = cls
+      ? `${SYSTEM_PROMPT}\n\nThe student is in Class ${cls}. Match the explanation level to this class.`
+      : SYSTEM_PROMPT;
+
     const payload = {
-      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      systemInstruction: { parts: [{ text: systemText }] },
       contents,
       generationConfig: {
         temperature: 0.6,
@@ -164,7 +182,10 @@ module.exports = async function handler(req, res) {
 
     const result = await askWithFallback(payload);
 
-    if (result.ok) return res.status(200).json({ reply: result.text });
+    // reply + answer + text: works with whichever key the frontend reads
+    if (result.ok) {
+      return res.status(200).json({ reply: result.text, answer: result.text, text: result.text });
+    }
 
     if (result.status === 429 || result.status === 503) {
       return res.status(200).json({
