@@ -80,6 +80,26 @@ async function askWithFallback(body) {
   return { ok: false, status: lastStatus || 503 };
 }
 
+// Accepts many possible field names so a frontend mismatch can't break it
+function extractMessage(body) {
+  const candidates = [
+    body.message,
+    body.question,
+    body.text,
+    body.prompt,
+    body.q,
+    body.query,
+    body.input,
+    body.msg,
+    body.content,
+    body.doubt,
+  ];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.trim()) return c.trim();
+  }
+  return "";
+}
+
 module.exports = async function handler(req, res) {
   // CORS (harmless if same-origin)
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -94,7 +114,11 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body) : req.body || {};
-    const message = String(body.message || body.question || "").trim();
+
+    // Debug: check Vercel function logs to see what the frontend really sends
+    console.log("BODY:", JSON.stringify(body).slice(0, 500));
+
+    const message = extractMessage(body);
     const history = Array.isArray(body.history) ? body.history : [];
 
     if (!message) return res.status(400).json({ reply: "Please type your doubt first." });
@@ -103,13 +127,21 @@ module.exports = async function handler(req, res) {
     }
 
     // Keep only the last 6 turns to save tokens
-    const contents = history
+    let contents = history
       .slice(-6)
-      .filter((h) => h && h.text)
-      .map((h) => ({
-        role: h.role === "user" ? "user" : "model",
-        parts: [{ text: String(h.text).slice(0, 2000) }],
-      }));
+      .map((h) => {
+        const t = h && (h.text ?? h.content ?? h.message);
+        if (!t) return null;
+        return {
+          role: h.role === "user" ? "user" : "model",
+          parts: [{ text: String(t).slice(0, 2000) }],
+        };
+      })
+      .filter(Boolean);
+
+    // Gemini expects the conversation to start with a user turn
+    while (contents.length && contents[0].role !== "user") contents.shift();
+
     contents.push({ role: "user", parts: [{ text: message }] });
 
     const payload = {
